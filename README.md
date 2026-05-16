@@ -20,7 +20,7 @@ This repository includes:
 - `example_data/example_denoised.npy`: output written by demo script.
 - `example_data/noisy.png`: visualization of noisy seismic data.
 - `example_data/denoised.png`: visualization of denoised seismic data.
-- `pt/example_pt.ckpt`: example pretrained checkpoint.
+- [Download checkpoint](https://drive.google.com/drive/folders/15j6PFx9OWUiAsOD4pCJi0eJstLur8acB?usp=sharing)
 
 ## Environment Setup
 
