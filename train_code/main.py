@@ -1,14 +1,10 @@
-﻿import os
-
+import os
 import torch
 from lightning import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.callbacks import ModelCheckpoint
-
 from data_modul import DataModule
 from net import Net
-
-
 def train():
     torch.set_float32_matmul_precision("high")
     os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
