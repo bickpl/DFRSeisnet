@@ -1,18 +1,18 @@
-
 import os
 import random
 
+import lightning as L
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-import lightning as L
 
 
-def guiyihua(data,min,max):
-    if min==max:
+def guiyihua(data, min, max):
+    if min == max:
         return data
-    return 2*(data-min)/(max-min)-1
+    return 2 * (data - min) / (max - min) - 1
+
 
 def data_list(data_dir):
     results = []
@@ -40,32 +40,36 @@ def load_data(path, full_shape=None):
         return m.reshape((edge, edge))
 
     raise ValueError(f"Cannot infer shape for {path}, element count={m.size}.")
+
+
 def modify_filename(filename):
-    # 分割文件名和扩展名
-    name, ext = filename.rsplit('.', 1)
+    # Split filename and extension.
+    name, ext = filename.rsplit(".", 1)
 
-    # 分割文件名中的各个部分
-    parts = name.split('_')
+    # Split all underscore-separated parts.
+    parts = name.split("_")
 
-    # 去掉最后一个_和倒数第二个_之间的内容
+    # Remove the second-last segment.
     if len(parts) > 2:
         parts = parts[:-2] + [parts[-1]]
 
-    # 重新组合文件名
-    new_name = '_'.join(parts) + '.' + ext
-
+    # Rebuild filename.
+    new_name = "_".join(parts) + "." + ext
     return new_name
+
+
 def selfguiyihua(data):
     q5 = np.percentile(data, 5)
     q95 = np.percentile(data, 95)
     delta = q95 - q5
 
-    # 更严格的判断条件
-    if delta < 1e-6:  # 设定合理阈值，避免浮点误差误判
+    # Stricter threshold to avoid floating-point false positives.
+    if delta < 1e-6:
         return data
-    normalized_quantile = 2*(data - q5) / (q95 - q5 + 1e-8)-1
-
+    normalized_quantile = 2 * (data - q5) / (q95 - q5 + 1e-8) - 1
     return normalized_quantile
+
+
 class NoiseDataset(Dataset):
     def __init__(
             self,
@@ -78,7 +82,7 @@ class NoiseDataset(Dataset):
             cache_in_memory=True,
     ):
         super().__init__()
-        self.noise_datas = data_list(os.path.join(data_paths, 'noisy'))
+        self.noise_datas = data_list(os.path.join(data_paths, "noisy"))
         self.full_shape = full_shape
         self.downsample_size = downsample_size
         self.patch_size = patch_size
@@ -102,7 +106,7 @@ class NoiseDataset(Dataset):
         sh, sw = self.stride
 
         for file_idx, noisy_path in enumerate(self.noise_datas):
-            full = np.load(noisy_path, mmap_mode='r')
+            full = np.load(noisy_path, mmap_mode="r")
             h, w = full.shape
             tops = list(range(0, h, sh))
             lefts = list(range(0, w, sw))
@@ -128,38 +132,38 @@ class NoiseDataset(Dataset):
 
     def _warmup_cache(self):
         for file_idx, noisy_path in enumerate(self.noise_datas):
-            clean_path = noisy_path.replace('noisy', 'clean')
+            clean_path = noisy_path.replace("noisy", "clean")
             noise_data = torch.from_numpy(np.load(noisy_path).astype(np.float32)).unsqueeze(0)
             clean = torch.from_numpy(np.load(clean_path).astype(np.float32)).unsqueeze(0)
 
             clean_small = F.interpolate(
-                clean.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                clean.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
             ).squeeze(0)
             noisy_small = F.interpolate(
-                noise_data.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                noise_data.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
             ).squeeze(0)
 
             entry = {
-                'noise_data': noise_data.contiguous(),
-                'clean': clean.contiguous(),
-                'clean_small': clean_small.contiguous(),
-                'noisy_small': noisy_small.contiguous(),
+                "noise_data": noise_data.contiguous(),
+                "clean": clean.contiguous(),
+                "clean_small": clean_small.contiguous(),
+                "noisy_small": noisy_small.contiguous(),
             }
 
             if self.random_flip:
                 noise_flip = torch.flip(noise_data, dims=[2]).contiguous()
                 clean_flip = torch.flip(clean, dims=[2]).contiguous()
                 clean_small_flip = F.interpolate(
-                    clean_flip.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                    clean_flip.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
                 ).squeeze(0).contiguous()
                 noisy_small_flip = F.interpolate(
-                    noise_flip.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                    noise_flip.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
                 ).squeeze(0).contiguous()
                 entry.update({
-                    'noise_data_flip': noise_flip,
-                    'clean_flip': clean_flip,
-                    'clean_small_flip': clean_small_flip,
-                    'noisy_small_flip': noisy_small_flip,
+                    "noise_data_flip": noise_flip,
+                    "clean_flip": clean_flip,
+                    "clean_small_flip": clean_small_flip,
+                    "noisy_small_flip": noisy_small_flip,
                 })
 
             self.file_cache[file_idx] = entry
@@ -170,21 +174,21 @@ class NoiseDataset(Dataset):
     def __getitem__(self, idx):
         file_idx, top, left = self.sample_indices[idx]
         noisy_path = self.noise_datas[file_idx]
-        clean_path = noisy_path.replace('noisy', 'clean')
+        clean_path = noisy_path.replace("noisy", "clean")
 
         do_flip = self.random_flip and random.random() < 0.5
         if self.cache_in_memory:
             cache = self.file_cache[file_idx]
-            if do_flip and 'noise_data_flip' in cache:
-                noise_data = cache['noise_data_flip']
-                clean = cache['clean_flip']
-                clean_small = cache['clean_small_flip']
-                noisy_small = cache['noisy_small_flip']
+            if do_flip and "noise_data_flip" in cache:
+                noise_data = cache["noise_data_flip"]
+                clean = cache["clean_flip"]
+                clean_small = cache["clean_small_flip"]
+                noisy_small = cache["noisy_small_flip"]
             else:
-                noise_data = cache['noise_data']
-                clean = cache['clean']
-                clean_small = cache['clean_small']
-                noisy_small = cache['noisy_small']
+                noise_data = cache["noise_data"]
+                clean = cache["clean"]
+                clean_small = cache["clean_small"]
+                noisy_small = cache["noisy_small"]
         else:
             noise_data = np.load(noisy_path)
             clean = np.load(clean_path)
@@ -194,10 +198,10 @@ class NoiseDataset(Dataset):
             noise_data = torch.from_numpy(noise_data.astype(np.float32)).unsqueeze(0)
             clean = torch.from_numpy(clean.astype(np.float32)).unsqueeze(0)
             clean_small = F.interpolate(
-                clean.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                clean.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
             ).squeeze(0)
             noisy_small = F.interpolate(
-                noise_data.unsqueeze(0), size=self.downsample_size, mode='bilinear', align_corners=False
+                noise_data.unsqueeze(0), size=self.downsample_size, mode="bilinear", align_corners=False
             ).squeeze(0)
 
         ph, pw = self.patch_size
@@ -206,18 +210,28 @@ class NoiseDataset(Dataset):
         noisy_small = noisy_small.repeat(2, 1, 1)
         patch_pos = torch.tensor([top, left, clean.shape[-2], clean.shape[-1]], dtype=torch.long)
         return {
-            'clean_small': clean_small,
-            'noisy_small': noisy_small,
-            'clean_patch': clean_patch,
-            'noisy_patch': noisy_patch,
-            'patch_pos': patch_pos,
+            "clean_small": clean_small,
+            "noisy_small": noisy_small,
+            "clean_patch": clean_patch,
+            "noisy_patch": noisy_patch,
+            "patch_pos": patch_pos,
         }
 
 
 class DataModule(L.LightningDataModule):
-    def __init__(self, train_dir: str = "./test_data", val_dir: str = "./test_data", batch_size: int = 4,
-                 random_flip=True, num_workers: int = 0, full_shape=None, downsample_size=(128, 128),
-                 patch_size=(256, 256), stride=(256, 256), cache_in_memory=True):
+    def __init__(
+            self,
+            train_dir: str = "./test_data",
+            val_dir: str = "./test_data",
+            batch_size: int = 4,
+            random_flip=True,
+            num_workers: int = 0,
+            full_shape=None,
+            downsample_size=(128, 128),
+            patch_size=(256, 256),
+            stride=(256, 256),
+            cache_in_memory=True,
+    ):
         super().__init__()
         self.train_dir = train_dir
         self.val_dir = val_dir
